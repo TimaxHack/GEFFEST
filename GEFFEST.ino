@@ -72,7 +72,23 @@ void loop(){}
 void kilibrocka() //калибровка mpu
 {}
 void data_from_serial() //собераем данные с бодов
-{}
+{
+  static boolean recvInProgress = false;
+  static byte ndx = 0;
+  char startMarker = '<';
+  char endMarker = '>';
+  char rc;
+
+  while (Serial.available() > 0 && newData == false)
+  {
+    delay(10);
+    rc = Serial.read();
+    //Serial.print(rc);
+ 
+    delay(10);
+    
+    
+    }
 void parse_data() // парсинг данных(фильтрация), кванторнионы
 {}
 void set_target_position() // выстовление позиций для серво
