@@ -1,0 +1,129 @@
+#include <Multiservo.h>
+ #include <Servo.h>
+Servo servo;
+// Создаём объект для работы с сервомоторами
+
+ 
+// Задаём имя пина к которому подключён сервопривод
+constexpr uint8_t MULTI_SERVO_PIN = 7; 
+#include "ServoSmooth.h"
+/*#define AMOUNT 3 
+#define BMOUNT 2
+#define CMOUNT 1
+#define DMOUNT 1
+#define VMOUNT 1
+#define NMOUNT 1
+ServoSmooth servo1[AMOUNT];
+ServoSmooth servo2[BMOUNT];
+ServoSmooth servo3[CMOUNT];
+ServoSmooth servo4[DMOUNT];
+
+ServoSmooth servo5[VMOUNT];
+*/
+Multiservo multiservo1;
+Multiservo multiservo2;
+Multiservo multiservo2_1;
+Multiservo multiservo3;
+Multiservo multiservo4;
+Multiservo multiservo5;
+Multiservo multiservo6;
+Multiservo multiservo7;
+
+constexpr uint8_t MULTI_SERVO_PIN1 = 0;
+constexpr uint8_t MULTI_SERVO_PIN2 = 1;
+constexpr uint8_t MULTI_SERVO_PIN2_1 = 2;
+constexpr uint8_t MULTI_SERVO_PIN3 = 3;
+constexpr uint8_t MULTI_SERVO_PIN5 = 5;
+constexpr uint8_t MULTI_SERVO_PIN6 = 6;
+constexpr uint8_t MULTI_SERVO_PIN7 = 7;
+constexpr uint8_t MULTI_SERVO_PIN8 = 8;
+
+
+ uint32_t servoTimer;
+    uint32_t turnTimer;
+//ServoSmooth servo6[NMOUNT];
+int position1 = 100;
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  /*Serial.print("rab");
+    servo1[0].attach(2);
+    servo1[1].attach(3);
+    servo1[2].attach(4);
+    servo2[0].attach(5);
+    servo2[1].attach(6);
+    servo3[0].attach(7);
+    servo4[0].attach(8);
+    servo5[0].attach(9);
+    servo6[0].attach(10);
+    */
+    multiservo1.attach(MULTI_SERVO_PIN1); 
+    multiservo2.attach(MULTI_SERVO_PIN2);
+    multiservo2_1.attach(MULTI_SERVO_PIN2_1);
+    multiservo3.attach(MULTI_SERVO_PIN3);
+    multiservo4.attach(MULTI_SERVO_PIN5);
+    multiservo5.attach(MULTI_SERVO_PIN6);
+    multiservo6.attach(MULTI_SERVO_PIN7);
+    multiservo7.attach(MULTI_SERVO_PIN8);
+
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  int rando1 = random(180);
+    //servo3[0].write(rando1);
+
+
+
+
+    int temp = random(180);
+    int temp1 = random(180);
+    int temp2 = random(180);  
+    int temp11 = 180 - temp1;
+    int temp12 = 180 - temp2;
+       // желаемая позиция задаётся методом setTarget (импульс) или setTargetDeg (угол), далее
+  // при вызове tick() производится автоматическое движение сервы
+  // с заданным ускорением и ограничением скорости
+   
+  if (millis() - servoTimer >= 40) {
+    servoTimer = millis();
+    //int newPos = map(analogRead(A2), 0, 1023, 500, 2400); // берём с потенцометра значение 500-2400 (импульс)
+    multiservo1.write(temp);               // и отправляем на серво
+    multiservo1.write(temp);
+    multiservo1.write(temp);
+    multiservo2.write(temp1);
+    multiservo2_1.write(temp11);
+    servo.write(rando1);
+    multiservo4.write(random(180));
+    multiservo5.write(random(180));
+    multiservo6.write(random(180));
+    multiservo7.write(random(180));
+
+    /*servo1[0].write(temp);               // и отправляем на серво
+    servo1[1].write(temp);
+    servo1[2].write(temp);
+    servo2[0].write(temp1);
+    servo2[1].write(temp11);
+    servo3[0].write(rando1);
+    servo4[0].write(random(180));
+    servo5[0].write(random(180));
+    servo6[0].setTarget(random(180));
+    //Serial.println(String(newPos) + " " + String(servo.getCurrent())/* + " " + String(state));
+  // state показывает сотояние сервы (0 - движется, 1 - приехали и отключились)*/
+   Serial.print(temp);
+   Serial.print("\t");
+   Serial.print(temp1);
+   Serial.print("\t");
+   Serial.print(temp11);
+   Serial.print("\t");
+   Serial.print(random(180));
+   Serial.print("\t");
+   Serial.print(random(180));
+   Serial.print("\t");
+   Serial.println(random(180)); 
+   delay(1000); 
+  }
+
+  
+}
