@@ -1,395 +1,107 @@
-#include <Servo.h>
-#include <SoftwareSerial.h>
-
 #include "ServoSmooth.h"
-#define COMPL_K 0.07
-#include "Wire.h"
-// получаем углы при помощи DMP
-#include "I2Cdev.h"
-#include "MPU6050_6Axis_MotionApps_V6_12.h"
-#include "Wire.h"
-
-#define AMON 1
-#define AMOUNT 3 
-#define BMOUNT 2
-#define CMOUNT 1
-#define DMOUNT 1
-#define VMOUNT 1
-#define NMOUNT 1
-ServoSmooth servos[AMON];
-ServoSmooth servo1[AMOUNT];
-ServoSmooth servo2[BMOUNT];
-ServoSmooth servo3[CMOUNT];
-ServoSmooth servo4[DMOUNT];
-ServoSmooth servo5[VMOUNT];
-ServoSmooth servo6[NMOUNT];
-
-
-
-#define btSerial Serial1
-
-SoftwareSerial btSerial(2, 3);
-
-
-const byte numChars = 32;
-char receivedChars[numChars];
-char tempChars[numChars];   // temporary array for use when parsing
-
-int quanrarnion1 =  90;
-int quanrarnion2 =  90;
-int quanrarnion2_1 =  90;
-
-// variables to hold the parsed data
-int xRecieve1 = 90;
-int xRecieve2 = 90;
-int yRecieve1 = 90;
-int yRecieve2 = 90;
-int flexRecieve1 = 90;
-int flexRecieve2 = 90;
-
-boolean newData = false;
-
-float currentAngle[6] = { 90,90,90,90,90,90 };
-float targetAngle[6] = { 90,90,90,90,90,90 };
-float moveSteps = 50;
-
-
-
-
-
-MPU6050 mpu;
-
-
-
-float angleX = 0;
-float angleY = 0;
-float angleZ = 0;
-
-float angleX1 = 0;
-float angleY1 = 0;
-float angleZ1 = 0;
-
-float angleX2 = 0;
-float angleY2 = 0;
-float angleZ2 = 0;
-boolean b = false;
-int16_t ax, ay, az;
-int16_t gx, gy, gz;
-
-const float toDeg = 180.0 / M_PI;
-uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
-uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
-uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
-uint16_t fifoCount;     // count of all bytes currently in FIFO
-uint8_t fifoBuffer[64]; // FIFO storage buffer
-Quaternion q;           // [w, x, y, z]         quaternion container
-VectorFloat gravity;    // [x, y, z]            gravity vector
-float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-
-// инициализация
-void initDMP() {
-  devStatus = mpu.dmpInitialize();
-  mpu.setDMPEnabled(true);
-  mpuIntStatus = mpu.getIntStatus();
-  packetSize = mpu.dmpGetFIFOPacketSize();
-}
-
-// получение углов в angleX, angleY, angleZ
-void getAngles() {
-  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-    angleX = ypr[2] * toDeg;
-    angleY = ypr[1] * toDeg;
-    angleZ = ypr[0] * toDeg;
-  }
-
-}
-
-
-
-void setup(){
-   //btSerial.begin(38400);
-  Serial.begin(38400);
-
-  Serial.println("begin servo");
-
-  targetAngle[0] = 90;
-  targetAngle[1] = 90;
-  targetAngle[2] = 90;
-  targetAngle[3] = 90;
-  targetAngle[4] = 90;
-  targetAngle[5] = 90;
-
-  servo1[1].attach(2);
-  servo1[2].attach(3);
-  servo1[3].attach(4);
-  servo2[4].attach(5);
-  servo2[5].attach(6);
-  servo3[6].attach(7);
-  servo4[7].attach(8);
-  servo5[8].attach(9);
-  servo6[9].attach(10);
-
-  Serial.println("servo started");
-  pinMode(13, OUTPUT);
-
-
-  digitalWrite(13, HIGH);
-  delay(2000);
-
-  digitalWrite(13, LOW);
-  delay(100);
-  digitalWrite(13, HIGH);
-  delay(100);
-  digitalWrite(13, LOW);
-  delay(100);
-  digitalWrite(13, HIGH);
-  delay(2000);
-
-  digitalWrite(13, LOW);
-  delay(100);
-  digitalWrite(13, HIGH);
-  delay(100);
-  digitalWrite(13, LOW);
+ServoSmooth servo1;
+ServoSmooth servo1_2;
+ServoSmooth servo1_3;
+ServoSmooth servo2;
+ServoSmooth servo2_2;
+ServoSmooth servo3;
+ServoSmooth servo4;
+ServoSmooth servo5;
+uint32_t myTimer;
+void setup() {
+  Serial.begin(9600);
+  servo1.attach(2, 600, 2400); 
+  servo1_2.attach(3, 600, 2400);
+  servo1_3.attach(5, 600, 2400); 
+  servo2.attach(6, 600, 2400);
+  servo2_2.attach(7, 600, 2400); 
+  servo3.attach(8, 600, 2400);
+  servo4.attach(9, 600, 2400); 
+  servo5.attach(10, 600, 2400);
   
-  Wire.begin();
-  Wire.setClock(400000ul);
-  Serial.begin(38400);
-  mpu.initialize();
-  initDMP();
-  pinMode(12, OUTPUT);
-  pinMode(8, OUTPUT);
-
-  btSerial.begin(38400);
-
-
-
-
- mpu.initialize();
-  mpu.setXAccelOffset(0);
-  mpu.setYAccelOffset(0);
-  mpu.setZAccelOffset(0);
-  mpu.setXGyroOffset(0);
-  mpu.setYGyroOffset(0);
-  mpu.setZGyroOffset(0);
-  Serial.println(F("Send any character to start sketch"));
-  delay(100);
-  while (1) {                     //входим в бесконечный цикл
-    if (Serial.available() > 0) { //если нажата любая кнопка
-      Serial.read();              //прочитать (чтобы не висел в буфере)
-      break;                      //выйти из цикла
-    }
-  }
-  delay(1000);
-}
-
-
-
   
-
-void loop(){
-data_from_serial();
-parse_data();
-update_geffa();
-}
-
-
-
-void connect_mpu(){ // переключение между mpu
-
-  if (b == true)
-  {
-    // смена адреса модуля
-    digitalWrite(12, HIGH);
-    digitalWrite(8, LOW);
-    
-    getAngles();
-    Serial.print("MPU pin12: ");
-    Serial.print(angleX); Serial.print("\t\t");
-    Serial.print(angleY); Serial.print("\t\t");
-    Serial.print(angleZ); Serial.print("\t\t");
-
-    // копируем полученные из getAngles() углы в глобальные переменные для последующей отправки
-    angleX1 = angleX;
-    angleY1 = angleY;
-    angleZ1 = angleZ;
-    delay(20);
-    b = false;
-  }
-  else
-  {
-    // смена адреса модуля
-    digitalWrite(12, LOW);
-    digitalWrite(8, HIGH);
-    
-    getAngles();
-    Serial.print("MPU pin8: ");
-    Serial.print(angleX); Serial.print("\t\t");
-    Serial.print(angleY); Serial.print("\t\t");
-    Serial.print(angleZ); Serial.print("\t\t");
-
-    // копируем полученные из getAngles() углы в глобальные переменные для последующей отправки
-    angleX2 = angleX;
-    angleY2 = angleY;
-    angleZ2 = angleZ;
-    delay(20);
-
-
-
-
-    
-    b = true;
-  }
-  delay(10);
-
   
-  }
-// ======= ФУНКЦИЯ КАЛИБРОВКИ =======
-void calibration() {
-  long offsets[6];
-  long offsetsOld[6];
-  int16_t mpuGet[6];
-  // используем стандартную точность
-  mpu.setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
-  mpu.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
-  // обнуляем оффсеты
-  mpu.setXAccelOffset(0);
-  mpu.setYAccelOffset(0);
-  mpu.setZAccelOffset(0);
-  mpu.setXGyroOffset(0);
-  mpu.setYGyroOffset(0);
-  mpu.setZGyroOffset(0);
-  int BUFFER_SIZE = 0;
-  delay(10);
-  Serial.println("Calibration start. It will take about 5 seconds");
-  for (byte n = 0; n < 10; n++) {     // 10 итераций калибровки
-    for (byte j = 0; j < 6; j++) {    // обнуляем калибровочный массив
-      offsets[j] = 0;
-    }
-    for (byte i = 0; i < 100 + BUFFER_SIZE; i++) { // делаем BUFFER_SIZE измерений для усреднения mpu.getMotion6(&mpuGet[0], &mpuGet[1], &mpuGet[2], &mpuGet[3], &mpuGet[4], &mpuGet[5]); if (i >= 99) {                         // пропускаем первые 99 измерений
-        for (byte j = 0; j < 6; j++) {
-          offsets[j] += (long)mpuGet[j];   // записываем в калибровочный массив
-        }
-      }
-    }
-    for (byte i = 0; i < 6; i++) {
-      offsets[i] = offsetsOld[i] - ((long)offsets[i] / BUFFER_SIZE); // учитываем предыдущую калибровку
-      if (i == 2) offsets[i] += 16384;                               // если ось Z, калибруем в 16384
-      offsetsOld[i] = offsets[i];
-    }
-    // ставим новые оффсеты
-    mpu.setXAccelOffset(offsets[0] / 8);
-    mpu.setYAccelOffset(offsets[1] / 8);
-    mpu.setZAccelOffset(offsets[2] / 8);
-    mpu.setXGyroOffset(offsets[3] / 4);
-    mpu.setYGyroOffset(offsets[4] / 4);
-    mpu.setZGyroOffset(offsets[5] / 4);
-    delay(2);
-
-  }
-
-
-
-
-
-
-void data_from_serial() //собераем данные с бодов
-{
-  static boolean recvInProgress = false;
-  static byte ndx = 0;
-  char startMarker = '<';
-  char endMarker = '>';
-  char raeder;
-
-  while (Serial.available() > 0 && newData == false)
-  {
-    delay(10);
-    raeder = Serial.read();
-    //Serial.print(rc);
- 
-    delay(10);
-
-    if (recvInProgress == true) {
-      if (raeder != endMarker) {  
-        if (raeder == startMarker) continue;
-        receivedChars[ndx] = raeder;
-        ndx++;
-        if (ndx >= numChars) {
-          ndx = numChars - 1;
-        }
-      }
-      else {
-        receivedChars[ndx] = '\0'; // terminate the string
-        recvInProgress = false;
-        ndx = 0;
-        newData = true;
-      }
-    }
-
-    else if (raeder == startMarker) {
-      recvInProgress = true;
-    }
-  }
- }
-
-
-
- 
-void parse_data() // парсинг данных(фильтрация), кванторнионы
-{
-char * strtokIndx; // this is used by strtok() as an index
-
-  strtokIndx = strtok(tempChars, ",");     // get the first part - the string
-  xRecieve1 = atoi(strtokIndx); // convert this part to a int, atoi =  перевод в int
-
-  strtokIndx = strtok(NULL, ",");
-  xRecieve2 = atoi(strtokIndx);
-
-  strtokIndx = strtok(NULL, ",");
-  yRecieve1 = atoi(strtokIndx);
-
-  strtokIndx = strtok(NULL, ",");
-  yRecieve2 = atoi(strtokIndx);
-
-  strtokIndx = strtok(NULL, ",");
-  flexRecieve1 = atoi(strtokIndx);
-
-  strtokIndx = strtok(NULL, ",");
-  flexRecieve2 = atoi(strtokIndx);
-
-
-
-
-}
-
-long mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
   
+  
+  // 600 и 2400 - длины импульсов, при которых
+  // серво поворачивается максимально в одну и другую сторону, зависят от самой серво
+  // и обычно даже указываются продавцом. Мы их тут указываем для того, чтобы
+  // метод setTargetDeg() корректно отрабатывал диапазон поворота сервы
+  servo1.setSpeed(90);   // ограничить скорость
+  servo1.setAccel(0.1);  // установить ускорение (разгон и торможение)
 }
+void loop() {
+ /* int vrach = random(180); 
+  int plecho = random(180);
+  int plecho1 = 180 - random(180);
+  int lokot = random(180);
+  int k_vrach = random(180);
+  int k_sgib = random(180);
+  int k_cshin = random(180);
+*/
 
-
-void update_geffa(){ 
-boolean state = servos[1].tickManual();
-int currentAngle1 = 180 - currentAngle[1];
-    int currentAngle2 = 180 - currentAngle[2];
-       // желаемая позиция задаётся методом setTarget (импульс) или setTargetDeg (угол), далее
+  //delay(2000);
+  // желаемая позиция задаётся методом setTarget (импульс) или setTargetDeg (угол), далее
   // при вызове tick() производится автоматическое движение сервы
   // с заданным ускорением и ограничением скорости
-    uint32_t servoTimer;
-    uint32_t turnTimer;
-  if (millis() - servoTimer >= 40) {
-    servoTimer = millis();
-    //int newPos = map(analogRead(A2), 0, 1023, 500, 2400); // берём с потенцометра значение 500-2400 (импульс)
-    servo1[1].setTarget(currentAngle[0]);               // и отправляем на серво
-    servo1[2].setTarget(currentAngle[0]);
-    servo1[3].setTarget(currentAngle[0]);
-    servo2[4].setTarget(currentAngle1);
-    servo2[5].setTarget(currentAngle[1]);
-    servo3[6].setTarget(currentAngle2);
-    servo4[7].setTarget(currentAngle[3]);
-    servo5[8].setTarget(currentAngle[4]);
-    servo6[9].setTarget(currentAngle[5]);}
+  boolean state1 = servo1.tick();
+  boolean state1_2 = servo1_2.tick();
+  boolean state1_3 = servo1_3.tick();
+  boolean state2 = servo2.tick();
+  boolean state2_2 = servo2_2.tick();
+  boolean state3 = servo3.tick();
+  boolean state4 = servo4.tick();
+  boolean state5 = servo5.tick();// здесь происходит движение серво по встроенному таймеру!
+  int newPos1 = map(analogRead(A2), 0, 1023, 500, 2400);
+    int newPos2 = map(analogRead(A3), 0, 1023, 500, 2400);
+    int newPos3 = map(analogRead(A4), 0, 1023, 500, 2400);
+    int newPos4 = map(analogRead(A5), 0, 1023, 500, 2400);
+    int newPos5 = map(analogRead(A6), 0, 1023, 500, 2400);
+   
+  if (millis() - myTimer >= 40) {
+
+    myTimer = millis();
+    /*int newPos1 = map(analogRead(A2), 0, 1023, 500, 2400);
+    int newPos2 = map(analogRead(A3), 0, 1023, 500, 2400);
+    int newPos3 = map(analogRead(A4), 0, 1023, 500, 2400);
+    int newPos4 = map(analogRead(A5), 0, 1023, 500, 2400);
+    int newPos5 = map(analogRead(A6), 0, 1023, 500, 2400);
+    // берём с потенцометра значение 500-2400 (импульс)
+*/
+
+    servo1.setTarget(newPos1);
+    servo1_2.setTarget(newPos1);
+    servo1_3.setTarget(newPos1);
+    servo2.setTarget(newPos2);
+    servo2_2.setTarget(180 - newPos2);
+    servo3.setTarget(newPos3);
+    servo4.setTarget(newPos4);
+    servo5.setTarget(newPos5);
+    Serial.print(newPos1);
+   Serial.print("\t");
+   Serial.print(newPos2);
+   Serial.print("\t");
+   Serial.print(180 - newPos2);
+   Serial.print("\t");
+   Serial.print(newPos3);
+   Serial.print("\t");
+   Serial.print(newPos4);
+   Serial.print("\t");
+   Serial.println(newPos5); 
+   
+
+
+    //delay(2000);
+    
+    
+    // и отправляем на серво
+    //Serial.println(String(newPos) + " " + String(servo1.getCurrent())/* + " " + String(state)*/);
+    //Serial.println(String(newPos) + " " + String(servo1.getCurrent())/* + " " + String(state)*/);
+  // state показывает сотояние сервы (0 - движется, 1 - приехали и отключились)
+  }
 }
+
+
+
+
+
