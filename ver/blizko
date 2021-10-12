@@ -1,0 +1,452 @@
+#include <Servo.h>
+#include <SoftwareSerial.h>
+#define btSerial SoftwareSerial
+SoftwareSerial btSerial(2, 3);
+#include <Multiservo.h>
+#include "ServoDriverSmooth.h"
+ 
+// Задаём количество сервоприводов
+constexpr uint8_t MULTI_SERVO_COUNT = 11;
+
+ServoDriverSmooth smoothServo[MULTI_SERVO_COUNT];
+Multiservo multiservo[MULTI_SERVO_COUNT];
+
+
+
+const byte numChars = 32;
+char receivedChars[numChars];
+char tempChars[numChars];   // temporary array for use when parsing
+
+// variables to hold the parsed data
+int xRecieve1 = 90;
+int xRecieve2 = 90;
+int yRecieve1 = 90;
+int yRecieve2 = 90;
+int flexRecieve1 = 90;
+int flexRecieve2 = 90;
+
+boolean newData = false;
+
+float currentAngle[6] = { 90,90,90,90,90,90 };
+float targetAngle[6] = { 90,90,90,90,90,90 };
+float moveSteps = 50;
+
+//============
+
+
+// I2Cdev and MPU6050 must be installed as libraries
+#include "I2Cdev.h"
+#include "MPU6050_6Axis_MotionApps20.h"
+#include "Wire.h"
+///////////////////////////////////   CONFIGURATION   /////////////////////////////
+#define BTN_PIN 3  
+#define FLEX_FIST_PIN 0 
+#define FLEX_ELBOW_PIN 1
+
+//Change this 3 variables if you want to fine tune the skecth to your needs.
+int buffersize=1000;     //Amount of readings used to average, make it higher to get more precision but sketch will be slower  (default:1000)
+int acel_deadzone=8;     //Acelerometer error allowed, make it lower to get more precision, but sketch may not converge  (default:8)
+int giro_deadzone=1;     //Giro error allowed, make it lower to get more precision, but sketch may not converge  (default:1)
+
+// default I2C address is 0x68
+// specific I2C addresses may be passed as a parameter here
+// AD0 low = 0x68 (default for InvenSense evaluation board)
+// AD0 high = 0x69
+MPU6050 mpuWrist(0x69);
+MPU6050 mpuShoulder(0x68);
+float yprW[3], yprS[3];
+
+int sensorF[2], sensorE[2];
+float flexF, flexE;
+
+uint8_t fifoBuffer[45];         // буфер
+
+int16_t ax, ay, az,gx, gy, gz;
+
+int mean_ax,mean_ay,mean_az,mean_gx,mean_gy,mean_gz,state=0;
+int ax_offset,ay_offset,az_offset,gx_offset,gy_offset,gz_offset;
+
+
+void setup() {
+  // put your setup code here, to run once:
+  btSerial.begin(38400);
+  Serial.begin(38400);
+
+  Serial.println("begin servo");
+
+  targetAngle[0] = 90;
+  targetAngle[1] = 90;
+  targetAngle[2] = 90;
+  targetAngle[3] = 90;
+  targetAngle[4] = 90;
+  targetAngle[5] = 90;
+  Serial.begin(9600);
+  
+  // Перебираем значения моторов
+  for (int count = 0; count < MULTI_SERVO_COUNT; count++) {
+    // Подключаем сервомотор
+    multiservo[count].attach(count);
+    smoothServo[count].attach(count);
+    smoothServo[count].setSpeed(20);
+    smoothServo[count].setAccel(0.05);
+    void smoothStart(); 
+  }
+
+  Serial.println("servo started");
+
+}
+int randomAngle[6];
+float timer;
+uint32_t myTimer;
+void loop() {
+  recvWithStartEndMarkers(); // проверили, есть ли данные на серийном порту и приняли их с маркерами
+  if (newData == true)
+  {
+
+    strcpy(tempChars, receivedChars);
+
+    newData = false;
+    parseData(); // спарсили в переменные
+    //Serial.println("parse data");
+
+    
+    xRecieve1 = constrain(xRecieve1,  -5, 110);
+    xRecieve1 = map(xRecieve1,  -5, 110, 0, 180);
+    targetAngle[3] = xRecieve1;
+
+    
+    xRecieve2 = constrain(xRecieve2,  -180, 180);
+    xRecieve2 = map(xRecieve2,  -180, 180, 0, 180);
+    targetAngle[4] = xRecieve2;
+    //targetAngle[4] = 90;
+
+    yRecieve2 = constrain(yRecieve2,  -90, 90);
+    yRecieve2 = map(yRecieve2,  -90, 90, 0, 180);
+
+    yRecieve1 = constrain(yRecieve1,  -90, 40);
+    yRecieve1 = map(yRecieve1,  -90, 40, 0, 180);
+    targetAngle[1] = yRecieve1;
+    
+    targetAngle[0] = yRecieve2;
+    
+    flexRecieve1 = constrain(flexRecieve1,  0, 180);
+    targetAngle[5] = flexRecieve1;
+
+    flexRecieve2 = constrain(flexRecieve2,  0, 180);
+    targetAngle[2] = flexRecieve2;
+    }
+  // put your main code here, to run repeatedly:
+  if (millis()-timer > 5000){
+    for (int count = 0; count < 6; count++){
+      randomSeed(analogRead(15));
+      randomAngle[count] = random(0, 180);
+    }
+    timer = millis();
+  }
+  
+  if (millis() - myTimer >= 40) {
+    myTimer = millis();
+    smoothServo[0].setTargetDeg(targetAngle[0]);
+    smoothServo[1].setTargetDeg(targetAngle[0]);
+    smoothServo[2].setTargetDeg(targetAngle[0]);
+    smoothServo[3].setTargetDeg(targetAngle[1]);
+    smoothServo[4].setTargetDeg(180 - targetAngle[1]);
+    smoothServo[5].setTargetDeg(180 - targetAngle[2]);
+    smoothServo[6].setTargetDeg(180 - targetAngle[2]);
+    smoothServo[7].setTargetDeg(targetAngle[3]);
+    smoothServo[8].setTargetDeg(targetAngle[4]);
+    smoothServo[9].setTargetDeg(targetAngle[5]);
+  }
+
+  for (int count = 0; count < MULTI_SERVO_COUNT; count++) {
+    smoothServo[count].tick();   
+    multiservo[count].write(smoothServo[count].getCurrentDeg());
+  }
+  
+
+
+
+}
+//////////////принятие и парсинг/////////////////
+
+
+void recvWithStartEndMarkers()
+{
+  static boolean recvInProgress = false;
+  static byte ndx = 0;
+  char startMarker = '<';
+  char endMarker = '>';
+  char rc;
+
+  while (btSerial.available() > 0 && newData == false)
+  {
+    delay(10);
+    rc = btSerial.read();
+    //Serial.print(rc);
+    
+    delay(10);
+
+    if (recvInProgress == true) {
+      if (rc != endMarker) {
+        if (rc == startMarker) continue;
+        receivedChars[ndx] = rc;
+        ndx++;
+        if (ndx >= numChars) {
+          ndx = numChars - 1;
+        }
+      }
+      else {
+        receivedChars[ndx] = '\0'; // terminate the string
+        recvInProgress = false;
+        ndx = 0;
+        newData = true;
+      }
+    }
+
+    else if (rc == startMarker) {
+      recvInProgress = true;
+    }
+  }
+}
+
+void parseData()
+{
+  char * strtokIndx; // this is used by strtok() as an index
+
+  strtokIndx = strtok(tempChars, ",");     // get the first part - the string
+  xRecieve1 = atoi(strtokIndx); // convert this part to a int, atoi =  перевод в int
+
+  strtokIndx = strtok(NULL, ",");
+  xRecieve2 = atoi(strtokIndx);
+
+  strtokIndx = strtok(NULL, ",");
+  yRecieve1 = atoi(strtokIndx);
+
+  strtokIndx = strtok(NULL, ",");
+  yRecieve2 = atoi(strtokIndx);
+
+  strtokIndx = strtok(NULL, ",");
+  flexRecieve1 = atoi(strtokIndx);
+
+  strtokIndx = strtok(NULL, ",");
+  flexRecieve2 = atoi(strtokIndx);
+}
+
+long mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
+/////////////////////////////приянтие и парсинг/////////////////////////////////////
+
+
+
+
+
+///////////////////////////////////////калибровка/////////////////////////////////////////////////
+void printToWaitPress(char *string){
+  timer = millis();
+  Serial.print(string);
+  while (1){
+    if (millis() - timer >= 500) { Serial.print("."); timer = millis();}
+
+  }              
+  while (Serial.available() && Serial.read());
+}
+
+
+void resetOffsets(MPU6050 mpu){
+  mpu.setXAccelOffset(0);
+  mpu.setYAccelOffset(0);
+  mpu.setZAccelOffset(0);
+  mpu.setXGyroOffset(0);
+  mpu.setYGyroOffset(0);
+  mpu.setZGyroOffset(0);
+}
+
+void calibrateMPU(MPU6050 mpu){
+  Serial.println("\nMPU6050 Calibration Sketch");
+  delay(2000);
+  Serial.println("\nYour MPU6050 should be placed in horizontal position, with package letters facing up. \nDon't touch it until you see a finish message.\n");
+  delay(3000);
+  // verify connection
+  Serial.println(mpuWrist.testConnection() ? "MPU6050 connection successful" : "MPU6050 connection failed");
+  delay(1000);
+  // reset offsets
+  resetOffsets(mpuWrist);
+  Serial.println("\nReading sensors for first time...");
+  meansensors(mpuWrist);
+  delay(1000);
+  Serial.println("\nCalculating offsets...");
+  calibration(mpuWrist);
+  delay(1000);
+  meansensors(mpuWrist);
+  Serial.println("\nFINISHED!");
+  Serial.print("\nSensor readings with offsets:\t");
+  Serial.print(mean_ax);
+  Serial.print("\t");
+  Serial.print(mean_ay);
+  Serial.print("\t");
+  Serial.print(mean_az);
+  Serial.print("\t");
+  Serial.print(mean_gx);
+  Serial.print("\t");
+  Serial.print(mean_gy);
+  Serial.print("\t");
+  Serial.println(mean_gz);
+  Serial.print("Your offsets:\t");
+  Serial.print(ax_offset);
+  Serial.print("\t");
+  Serial.print(ay_offset);
+  Serial.print("\t");
+  Serial.print(az_offset);
+  Serial.print("\t");
+  Serial.print(gx_offset);
+  Serial.print("\t");
+  Serial.print(gy_offset);
+  Serial.print("\t");
+  Serial.println(gz_offset);
+  Serial.println("\nData is printed as: acelX acelY acelZ giroX giroY giroZ");
+  Serial.println("Check that your sensor readings are close to 0 0 16384 0 0 0");
+  Serial.println("If calibration was succesful write down your offsets so you can set them in your projects using something similar to mpu.setXAccelOffset(youroffset)");
+  Serial.println();
+}
+
+void meansensors(MPU6050 mpu){
+  long i=0,buff_ax=0,buff_ay=0,buff_az=0,buff_gx=0,buff_gy=0,buff_gz=0;
+
+  while (i<(buffersize+101)){
+    // read raw accel/gyro measurements from device
+    mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+ 
+    if (i>100 && i<=(buffersize+100)){ //First 100 measures are discarded
+      buff_ax=buff_ax+ax;
+      buff_ay=buff_ay+ay;
+      buff_az=buff_az+az;
+      buff_gx=buff_gx+gx;
+      buff_gy=buff_gy+gy;
+      buff_gz=buff_gz+gz;
+    }
+    if (i==(buffersize+100)){
+      mean_ax=buff_ax/buffersize;
+      mean_ay=buff_ay/buffersize;
+      mean_az=buff_az/buffersize;
+      mean_gx=buff_gx/buffersize;
+      mean_gy=buff_gy/buffersize;
+      mean_gz=buff_gz/buffersize;
+    }
+    i++;
+    delay(2); //Needed so we don't get repeated measures
+  }
+}
+
+void calibration(MPU6050 mpu){
+  ax_offset=-mean_ax/8;
+  ay_offset=-mean_ay/8;
+  az_offset=(16384-mean_az)/8;
+
+  gx_offset=-mean_gx/4;
+  gy_offset=-mean_gy/4;
+  gz_offset=-mean_gz/4;
+  while (1){
+    int ready=0;
+    mpu.setXAccelOffset(ax_offset);
+    mpu.setYAccelOffset(ay_offset);
+    mpu.setZAccelOffset(az_offset);
+
+    mpu.setXGyroOffset(gx_offset);
+    mpu.setYGyroOffset(gy_offset);
+    mpu.setZGyroOffset(gz_offset);
+
+    meansensors(mpu);
+    Serial.print("|");
+
+    if (abs(mean_ax)<=acel_deadzone) ready++;
+    else ax_offset=ax_offset-mean_ax/acel_deadzone;
+
+    if (abs(mean_ay)<=acel_deadzone) ready++;
+    else ay_offset=ay_offset-mean_ay/acel_deadzone;
+
+    if (abs(16384-mean_az)<=acel_deadzone) ready++;
+    else az_offset=az_offset+(16384-mean_az)/acel_deadzone;
+
+    if (abs(mean_gx)<=giro_deadzone) ready++;
+    else gx_offset=gx_offset-mean_gx/(giro_deadzone+1);
+
+    if (abs(mean_gy)<=giro_deadzone) ready++;
+    else gy_offset=gy_offset-mean_gy/(giro_deadzone+1);
+
+    if (abs(mean_gz)<=giro_deadzone) ready++;
+    else gz_offset=gz_offset-mean_gz/(giro_deadzone+1);
+
+    if (ready==6) break;
+  }
+}
+
+void getMPUAngles(MPU6050 mpu1, float *ypr1, MPU6050 mpu2, float *ypr2){
+static uint32_t tmr;
+static uint32_t tmr2;
+  if (millis() - tmr >= 11) {  // таймер на 11 мс (на всякий случай)
+    if (mpu1.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+      // переменные для расчёта (ypr можно вынести в глобал)
+      Quaternion q;
+      VectorFloat gravity;
+      //float ypr[3];
+
+      // расчёты
+      mpu1.dmpGetQuaternion(&q, fifoBuffer);
+      mpu1.dmpGetGravity(&gravity, &q);
+      mpu1.dmpGetYawPitchRoll(ypr1, &q, &gravity);
+
+      tmr = millis();  // сброс таймера
+    }
+  }
+  if (millis() - tmr2 >= 11) {  // таймер на 11 мс (на всякий случай)
+    if (mpu2.dmpGetCurrentFIFOPacket(fifoBuffer)) {
+      // переменные для расчёта (ypr можно вынести в глобал)
+      Quaternion q2;
+      VectorFloat gravity2;
+      //float ypr[3];
+
+      // расчёты
+      mpu2.dmpGetQuaternion(&q2, fifoBuffer);
+      mpu2.dmpGetGravity(&gravity2, &q2);
+      mpu2.dmpGetYawPitchRoll(ypr2, &q2, &gravity2);
+
+      tmr2 = millis();  // сброс таймера
+    }
+  }
+}
+void SHITovanie(MPU6050 mpu1, float *ypr1, MPU6050 mpu2, float *ypr2){
+  Quaternion q1;
+  Quaternion q2;
+  VectorFloat gravity1;
+  VectorFloat gravity2;
+  mpu1.dmpGetQuaternion(&q1, fifoBuffer); // берем значение кватернионов с 1 mpu
+   /* Serial.print("quat\t");// считываем значение кватернионов
+      Serial.print(q1.w);
+      Serial.print("\t");
+      Serial.print(q1.x);
+      Serial.print("\t");
+      Serial.print(q1.y);
+      Serial.print("\t");
+      Serial.println(q1.z);*/
+
+  float mpu_lokot = map(q1.z, -3.14, 3.14, 0, 180); 
+  
+
+  mpu2.dmpGetQuaternion(&q2, fifoBuffer);// считываем значение кватернионов с 2 mpu
+     /* Serial.print("quat\t");// считываем значение кватернионов
+      Serial.print(q2.w);
+      Serial.print("\t");
+      Serial.print(q2.x);
+      Serial.print("\t");
+      Serial.print(q2.y);
+      Serial.print("\t");
+      Serial.println(q2.z);*/     
+      float mpu_lokot_kist = 4.9348022 - mpu_lokot;
+      float mpu_kist = q2.z + mpu_lokot_kist;
+      float mpu_kist_map = map(mpu_kist, -3.14, 3.14, 0, 180);
+   
+}
